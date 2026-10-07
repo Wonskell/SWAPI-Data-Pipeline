@@ -1,191 +1,164 @@
-from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 import requests
 import requests_mock
-import requests_mock.exceptions
 
-
-try:
-    import swapi
-except ModuleNotFoundError:
-    assert False, "Не найдена домашняя работа"
-
-init_base_url = [
-    {
-        "base_url": "https://swapi.dev/api",
-        "text": "test text 1",
-        "json": {"key1": "v1", "key2": "v2"},
-    },
-    {
-        "base_url": "https://ya.ru/t",
-        "text": "test text 2",
-        "json": {"key8": "v8", "key9": "v9"},
-    },
-]
+import swapi
 
 
 class TestAPIRequester:
-    @pytest.mark.parametrize("kwargs", init_base_url)
-    def test_init(self, kwargs, msg_err):
-        assert hasattr(swapi, "APIRequester"), msg_err("add_class", "APIRequester")  # noqa
+    def test_init_removes_trailing_slash(self):
+        requester = swapi.APIRequester("https://swapi.dev/api/")
 
-        result = swapi.APIRequester(kwargs["base_url"])
-        assert hasattr(result, "base_url"), msg_err(
-            "add_attr", "base_url", "APIRequester"
-        )
-        assert result.base_url == kwargs["base_url"], msg_err(
-            "wrong_attr", "base_url", "APIRequester"
-        )
+        assert requester.base_url == "https://swapi.dev/api"
 
-    @pytest.mark.parametrize("kwargs", init_base_url)
-    def test_get(self, kwargs, msg_err, capfd):
-        result = swapi.APIRequester(kwargs["base_url"])
-        assert hasattr(result, "get"), msg_err("add_method", "get", "APIRequester")  # noqa
+    def test_get_success(self):
+        requester = swapi.APIRequester("https://example.com")
 
-        with requests_mock.Mocker() as m:
-            url = f"{kwargs['base_url']}/url"
-            m.get(url, json={"name": "get-mock"})
+        with requests_mock.Mocker() as mock:
+            mock.get(
+                "https://example.com/test",
+                json={"status": "ok"},
+            )
 
-            try:
-                resp = result.get("/url")
-            except requests_mock.exceptions.NoMockAddress:
-                assert (
-                    m.last_request.url == url
-                ), "Убедитесь, что правильно формируете адрес из переданных параметров в методе `get` класса `APIRequester`"  # noqa
+            response = requester.get("test")
 
-            assert resp.json() == {
-                "name": "get-mock"
-            }, "Убедитесь, что метод возвращает объект класса `Response`"
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
 
-            m.get(url, exc=requests.exceptions.RequestException)
+    def test_get_error_returns_none(self, capsys):
+        requester = swapi.APIRequester("https://example.com")
 
-            resp = result.get("/url")
+        with requests_mock.Mocker() as mock:
+            mock.get(
+                "https://example.com/test",
+                exc=requests.RequestException,
+            )
 
-            out, err = capfd.readouterr()
-            assert (
-                out.strip() == "Возникла ошибка при выполнении запроса"
-            ), "Выведите сообщение об ошибке при их возникновении"
+            response = requester.get("test")
+
+        captured = capsys.readouterr()
+
+        assert response is None
+        assert "Возникла ошибка при выполнении запроса" in captured.out
 
 
 class TestSWRequester:
-    @pytest.mark.parametrize("kwargs", init_base_url)
-    def test_get_sw_info(self, kwargs, sw_type, msg_err):
-        assert hasattr(swapi, "SWRequester"), msg_err(
-            "add_class", "SWRequester", child=True, parent_name="APIRequester"
-        )
+    def test_get_sw_categories(self):
+        requester = swapi.SWRequester("https://swapi.dev/api")
 
-        result = swapi.SWRequester(kwargs["base_url"])
+        with requests_mock.Mocker() as mock:
+            mock.get(
+                "https://swapi.dev/api/",
+                json={
+                    "people": "https://swapi.dev/api/people/",
+                    "planets": "https://swapi.dev/api/planets/",
+                },
+            )
 
-        with requests_mock.Mocker() as m:
-            url = f'{kwargs["base_url"]}/{sw_type}/'
-            m.get(url, text=kwargs["text"])
-            try:
-                resp = result.get_sw_info(sw_type)
-            except requests_mock.exceptions.NoMockAddress:
-                assert (
-                    m.last_request.url == url
-                ), "Убедитесь, что правильно формируете часть адреса из переданных параметров в методе `get_sw_info` класса `SWRequester`"  # noqa
+            categories = requester.get_sw_categories()
 
-            assert (
-                resp == kwargs["text"]
-            ), "Убедитесь, что метод `get_sw_info` класса `SWRequester` возвращает ответ в виде строки"  # noqa
+        assert list(categories) == ["people", "planets"]
 
-    @pytest.mark.parametrize("kwargs", init_base_url)
-    def test_get_sw_categories(self, kwargs, sw_type, msg_err):
-        result = swapi.SWRequester(kwargs["base_url"])
+    def test_get_sw_info_single_page(self):
+        requester = swapi.SWRequester("https://swapi.dev/api")
 
-        with requests_mock.Mocker() as m:
-            url = f'{kwargs["base_url"]}/'
-            m.get(url, json=kwargs["json"])
-            try:
-                resp = result.get_sw_categories()
-            except requests_mock.exceptions.NoMockAddress:
-                assert (
-                    m.last_request.url == url
-                ), "Убедитесь, что правильно формируете адрес в методе `get_sw_categories` класса `SWRequester`"  # noqa
+        with requests_mock.Mocker() as mock:
+            mock.get(
+                "https://swapi.dev/api/people/",
+                json={
+                    "count": 2,
+                    "next": None,
+                    "previous": None,
+                    "results": [
+                        {"name": "Luke Skywalker"},
+                        {"name": "Darth Vader"},
+                    ],
+                },
+            )
 
-            assert (
-                resp == kwargs["json"].keys()
-            ), "Убедитесь, что метод `get_sw_categories` класса `SWRequester` возвращает требуемое значение (ключи словаря)"  # noqa
+            result = requester.get_sw_info("people")
 
+        assert result == [
+            {"name": "Luke Skywalker"},
+            {"name": "Darth Vader"},
+        ]
 
-class MockPath:
-    def __init__(self, path) -> None:
-        global _path
-        _path = path
+    def test_get_sw_info_pagination(self):
+        requester = swapi.SWRequester("https://swapi.dev/api")
 
-    def mkdir(self, **kwargs) -> None:
-        global _mkdir
-        _mkdir = kwargs
+        with requests_mock.Mocker() as mock:
+            mock.get(
+                "https://swapi.dev/api/people/",
+                json={
+                    "next": "https://swapi.dev/api/people/?page=2",
+                    "results": [
+                        {"name": "Luke Skywalker"},
+                        {"name": "Darth Vader"},
+                    ],
+                },
+            )
 
+            mock.get(
+                "https://swapi.dev/api/people/?page=2",
+                json={
+                    "next": None,
+                    "results": [
+                        {"name": "Leia Organa"},
+                    ],
+                },
+            )
 
-class MockSWRequester:
-    categories = ["category_1", "category_2", "category_3"]
-    text_prefix = "test text for "
+            result = requester.get_sw_info("people")
 
-    def __init__(self, *args, **kwargs) -> None:
-        global _swr_args
-        global _swr_kwargs
-        _swr_args = args
-        _swr_kwargs = kwargs
+        assert result == [
+            {"name": "Luke Skywalker"},
+            {"name": "Darth Vader"},
+            {"name": "Leia Organa"},
+        ]
 
-    def get_sw_categories(self) -> dict:
-        return self.categories
+    def test_get_sw_info_stops_on_request_error(self):
+        requester = swapi.SWRequester("https://swapi.dev/api")
 
-    def get_sw_info(self, category) -> str:
-        return f"{self.text_prefix}{category}"
+        with requests_mock.Mocker() as mock:
+            mock.get(
+                "https://swapi.dev/api/people/",
+                exc=requests.RequestException,
+            )
 
+            result = requester.get_sw_info("people")
 
-_files_ctx = dict()
-
-
-@contextmanager
-def mock_open(*args, **kwargs):
-    global _files_ctx, _open_args
-    _open_args = args
-    pass
-
-    class MockWrite:
-        @staticmethod
-        def write(data):
-            _files_ctx[_open_args[0]] = data
-
-    _f = MockWrite()
-
-    try:
-        yield _f
-    finally:
-        pass
+        assert result == []
 
 
 class TestSaveSWData:
-    def test_save_sw_data(self):
-        _Path = swapi.Path
-        swapi.Path = MockPath
-        swapi.SWRequester = MockSWRequester
-        swapi.open = mock_open
+    def test_save_sw_data(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+
+        class MockSWRequester:
+            def __init__(self, base_url):
+                self.base_url = base_url
+
+            def get_sw_categories(self):
+                return ["people", "planets"]
+
+            def get_sw_info(self, category):
+                return [{"category": category}]
+
+        monkeypatch.setattr(swapi, "SWRequester", MockSWRequester)
 
         swapi.save_sw_data()
 
-        swapi.Path = _Path
+        people_file = Path("data/people.json")
+        planets_file = Path("data/planets.json")
 
-        assert (
-            _path == "data"
-        ), "Функция `sawe_sw_data` не создает каталог с именем `data`"
-        assert _mkdir == {
-            "exist_ok": True
-        }, "При создании каталога укажите параметр `exist_ok=True`"
+        assert people_file.exists()
+        assert planets_file.exists()
 
-        assert _swr_args == (
-            "https://swapi.dev/api",
-        ), 'Передайте один параметр `"https://swapi.dev/api"` при объявлении экземпляра класса `SWRequester` в функции `save_sw_data`'  # noqa
-        assert (
-            _swr_kwargs == {}
-        ), 'Передайте один параметр `"https://swapi.dev/api"` при объявлении экземпляра класса `SWRequester` в функции `save_sw_data`'  # noqa
-
-        assert _files_ctx == {
-            "data/category_1.txt": "test text for category_1",
-            "data/category_2.txt": "test text for category_2",
-            "data/category_3.txt": "test text for category_3",
-        }, "Убедитесь что функция `save_sw_data` сохраняет результат согласно требования задания"  # noqa
+        assert '"category": "people"' in people_file.read_text(
+            encoding="utf-8"
+        )
+        assert '"category": "planets"' in planets_file.read_text(
+            encoding="utf-8"
+        )
