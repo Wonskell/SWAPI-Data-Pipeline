@@ -1,28 +1,97 @@
-# Проект SWAPI
+# SWAPI Data Pipeline
 
-* Создайте [виртуальное окружение](https://docs.python.org/3/library/venv.html) и активируйте его:
-```shell script
-python3 -m venv venv
+Учебный Python-проект для получения и сохранения данных из публичного REST API [SWAPI](https://swapi.dev/).
+
+Проект демонстрирует работу с внешним API, обработку HTTP-запросов, получение категорий данных и сохранение полученных результатов в локальные файлы.
+
+## Возможности
+
+- подключение к REST API;
+- выполнение HTTP GET-запросов;
+- обработка HTTP-ошибок;
+- автоматическое получение доступных категорий SWAPI;
+- загрузка данных по каждой категории;
+- автоматическое создание директории для данных;
+- сохранение результатов в отдельные файлы;
+- автоматические тесты с использованием pytest.
+
+## Технологии
+
+- Python
+- Requests
+- REST API
+- JSON
+- Pytest
+
+## Структура проекта
+
+```text
+SWAPI-Data-Pipeline/
+├── swapi.py
+├── requirements.txt
+├── pytest.ini
+├── tests/
+│   ├── conftest.py
+│   ├── test_swapi.py
+│   └── fixtures/
+│       └── fixture_msg.py
+└── data/
 ```
 
-* Активируйте его:
-```shell script
-source venv/bin/activate
-```
-или в Windowns
-```shell script
-source venv/Scripts/activate
+`data/` создаётся автоматически при загрузке данных и не хранится в Git-репозитории.
+
+## Как работает проект
+
+Основной процесс загрузки данных реализован в функции `save_sw_data()`.
+
+Программа:
+
+1. Подключается к SWAPI.
+2. Получает список доступных категорий.
+3. Выполняет запрос для каждой категории.
+4. Создаёт директорию `data`.
+5. Сохраняет полученные данные в отдельный файл для каждой категории.
+
+Например:
+
+```text
+data/people.txt
+data/planets.txt
+data/films.txt
+data/species.txt
+data/vehicles.txt
+data/starships.txt
 ```
 
-* Обновите pip до последней версии:
-```shell script
-pip install --upgrade pip
+## Установка
+
+Клонируйте репозиторий:
+
+```bash
+git clone https://github.com/Wonskell/SWAPI-Data-Pipeline.git
+cd SWAPI-Data-Pipeline
 ```
-* Установите зависимости:
-```shell script
+
+Создайте виртуальное окружение:
+
+```bash
+python -m venv .venv
+```
+
+Установите зависимости:
+
+```bash
 pip install -r requirements.txt
 ```
-* После выполнения задания убедитесь что успешно пройдены все тесты
-```shell script
+
+## Тестирование
+
+Для запуска тестов:
+
+```bash
 pytest
 ```
+
+## Цель проекта
+
+Проект создан в рамках практики Python и работы с внешними источниками данных. Основная цель — отработка получения данных через REST API, организации кода и автоматического тестирования.
